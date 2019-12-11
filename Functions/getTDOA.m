@@ -17,5 +17,5 @@ function tdoa_s = getTDOA(anchors, pos, time)
     d2 = norm(pos-tdoa_s.a2);
     tdoa_s.dist_diff = d1-d2;
     tdoa_s.mode = 'tdoa';
-    tdoa_s.time = time;
+    tdoa_s.timestamp = time;
 end

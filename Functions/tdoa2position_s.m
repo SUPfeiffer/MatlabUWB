@@ -11,7 +11,8 @@ function pos = tdoa2position_s(tdoa,prior)
     a2 = tdoa.a2';
     X = [prior'; 0];
     F = zeros(4,1);
-    
+    timeout_max_i = 20;
+    exit_timeout = 0;
     while (true)
         d1 = norm(X(1:3)-a1);
         d2 = norm(X(1:3)-a2);
@@ -39,14 +40,19 @@ function pos = tdoa2position_s(tdoa,prior)
             gradS = (X_new(1:3)-a1)/d1 - (X_new(1:3)-a2)/d2;
             F_new(1:3) = X_new(1:3) + X_new(4)*gradS - prior';
             F_new(4) = d1 - d2 - tdoa.dist_diff;
-            if (norm(F_new)<norm(F))
+            if (norm(F_new)<=norm(F))
+                break;
+            elseif (i>timeout_max_i)
+                exit_timeout = 1;
                 break;
             else
                 i = i+1;
             end
         end
         X = X_new;
-        if ((abs(delta)<0.01) == ones(4,1))
+        if ((abs(delta)<0.001) == ones(4,1))
+            break;
+        elseif (exit_timeout)
             break;
         end
     end

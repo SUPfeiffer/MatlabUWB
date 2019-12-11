@@ -7,6 +7,6 @@ function pos = twr2position_s(twr,prior)
     % @return pos: the projection of the prior onto the tdoa measurement
     %               [x,y,z]
     
-    pos = twr.a + twr.distance * (prior-twr.a)/norm(prior-twr.a);
+    pos = twr.anchor + twr.distance * (prior-twr.anchor)/norm(prior-twr.anchor);
    
 end

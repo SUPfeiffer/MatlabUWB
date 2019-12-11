@@ -22,12 +22,12 @@ P = [0, 0; 0, PV]; % penalty matrix
 
 % Anchors (one row per anchor, [x,y,z]
 anchors = [ 0, 0, 0
-            %0, 0, 5;
-            %0, 5, 0;
+            0, 0, 5;
+            0, 5, 0;
             0, 5, 5;
             5, 5, 0;
-            %5, 5, 5;
-            %5, 0, 0;
+            5, 5, 5;
+            5, 0, 0;
             5, 0, 5];
 
 % Tag trajectory (ground truth)
@@ -56,7 +56,7 @@ for i=2:N
 end
 
 % Tag estimator
-pred.p = [2,2,0];
+pred.p = [3,3,0];
 pred.v = [0,0,0];
 
 state.p = pred.p;
