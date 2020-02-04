@@ -3,18 +3,19 @@
 close all;
 clear all;
 addpath('Functions');
-load('simulationData_test.mat')
+load('Data/square.mat')
 %% Parameters
-pos_update_dt = 100;
-mhe_timeHorizon = 2.0;
-ransac_iter = 5;
+mode = 'multi';
+pos_update_dt = 0.1;
+mhe_timeHorizon = 0.5; % s
+ransac_iter = 10;
 ransac_sampleSize = 2;
-ransac_outlierThreshold = 0.2;
+ransac_outlierThreshold = 0.05;
 PV = 1;
 ransac_prior = [0 0; 
                 0 PV];
             
-MAX_WINDOW_SIZE = 10;
+MAX_WINDOW_SIZE = 100;
 N = length(data.time);
 const_g = 9.81;
 const_k_aero = 0.35;
@@ -37,7 +38,15 @@ windowSize = 0;
 corrector.p = [0,0,0];
 corrector.v = [0,0,0];
 
-for i=2:N
+% convert time to seconds
+data.time = data.time/1000;
+for i = 1:length(data.uwb)
+    data.uwb(i).timestamp = data.uwb(i).timestamp/1000;
+end
+
+uwb_count = 1;
+
+for i=291:N
     if(mod(data.time(i),pos_update_dt) == 0)
         % no estimation of attitude yet
         state.pitch = data.pitch(i);
@@ -46,35 +55,66 @@ for i=2:N
     
         % z initial estimate not by mhe
         state.p(3) = data.z(i);
-        state.v(3) = data.vz(i);
+        state.v(3) = (data.z(i)-data.z(i-1))/(data.time(i)-data.time(i-1));
         
         % predict current state
         pitch_global = state.pitch * cos(state.yaw) - state.roll*sin(state.yaw);
         roll_global = state.pitch * sin(state.yaw) + state.roll*cos(state.yaw);
         
-        prediction.p(1) = prediction.p(1) + prediction.v(1) * pos_update_dt/1000;
-        prediction.p(2) = prediction.p(2) + prediction.v(2) * pos_update_dt/1000;
+        prediction.p(1) = prediction.p(1) + prediction.v(1) * pos_update_dt;
+        prediction.p(2) = prediction.p(2) + prediction.v(2) * pos_update_dt;
         prediction.p(3) = state.p(3);
         
         %prediction.v(1) = data.vx(i);
         %prediction.v(2) = data.vy(i);
         %prediction.v(3) = data.vz(i);
         
-        prediction.v(1) = (-const_g*tan(pitch_global) - const_k_aero*state.v(1))*pos_update_dt/1000;
-        prediction.v(2) = (const_g*tan(roll_global) - const_k_aero*state.v(2))*pos_update_dt/1000;
+        prediction.v(1) = prediction.v(1) + (-const_g*tan(pitch_global) - const_k_aero*state.v(1))*pos_update_dt;
+        prediction.v(2) = prediction.v(2) + (const_g*tan(roll_global) - const_k_aero*state.v(2))*pos_update_dt;
         prediction.v(3) = state.v(3);
         
         % Measurement
-        if (data.uwb(i).timestamp ~= last_uwb_timestamp)
-            last_uwb_timestamp = data.uwb(i).timestamp;
-            if (strcmp(data.uwb(i).mode,'tdoa'))
-                measurement = tdoa2position_s(data.uwb(i),prediction.p);
-            elseif(strcmp(data.uwb(i).mode,'twr'))
-                measurement = twr2position_s(data.uwb(i),prediction.p);
-            else
-                break;
+        measurement_update = 0;
+        if(strcmp(mode,'single'))
+            while (uwb_count <= length(data.uwb) && data.uwb(uwb_count).timestamp <= data.time(i))
+                if (data.uwb(uwb_count).timestamp == data.time(i))
+                    measurement_update = 1;
+                    if (strcmp(data.uwb(uwb_count).mode,'tdoa'))
+                        measurement = tdoa2position_s(data.uwb(uwb_count),prediction.p);
+                    elseif(strcmp(data.uwb(uwb_count).mode,'twr'))
+                        measurement = twr2position_s(data.uwb(uwb_count),prediction.p);
+                    else
+                        break;
+                    end
+                    log.measurement.x(uwb_count) = measurement(1);
+                    log.measurement.y(uwb_count) = measurement(2);
+                    log.measurement.z(uwb_count) = measurement(3);
+                    % Window Updates
+                    dpos_w = circshift(dpos_w,1,1);
+                    time_w = circshift(time_w,1,1);
+                    dpos_w(1,:) = measurement - prediction.p;
+                    time_w(1) = data.time(i);
+
+                    if (windowSize < MAX_WINDOW_SIZE)
+                        windowSize = windowSize + 1;
+                    end
+                    while ((time_w(1)-time_w(windowSize)) > mhe_timeHorizon)
+                        windowSize = windowSize -1;
+                    end     
+                end
+                uwb_count = uwb_count + 1;
             end
-        
+        elseif(strcmp(mode,'multi'))
+            while (uwb_count <= length(data.uwb) && data.uwb(uwb_count).timestamp <= data.time(i))
+                newUWB = data.uwb(uwb_count);
+                twr_mem(newUWB.id + 1) = newUWB;
+                uwb_count = uwb_count + 1;     
+            end
+    
+            measurement = twr2position_m(twr_mem(1),twr_mem(2),twr_mem(3),twr_mem(4));
+            log.measurement.x(uwb_count) = measurement(1);
+            log.measurement.y(uwb_count) = measurement(2);
+            log.measurement.z(uwb_count) = measurement(3);
             % Window Updates
             dpos_w = circshift(dpos_w,1,1);
             time_w = circshift(time_w,1,1);
@@ -84,13 +124,19 @@ for i=2:N
             if (windowSize < MAX_WINDOW_SIZE)
                 windowSize = windowSize + 1;
             end
-            while (time_w(windowSize)-time_w(1) > mhe_timeHorizon)
+            while ((time_w(1)-time_w(windowSize)) > mhe_timeHorizon)
                 windowSize = windowSize -1;
-            end
+            end     
+        else
+            break;
+        end
 
+        
+        
+        if measurement_update
             dt_w = time_w - time_w(windowSize);
 
-            if(windowSize >= ransac_sampleSize)
+            if(windowSize >= ransac_sampleSize && sum(dt_w>0)>ransac_sampleSize-1)
                 best_error = windowSize * ransac_outlierThreshold;
 
                 for j=1:ransac_iter
@@ -103,9 +149,9 @@ for i=2:N
                                 * (dt_w(idx(2)) - dt_w(idx(1))) + (dpos_w(idx(1),:) + dpos_w(idx(2),:)) * PV)/denom;
                         s_dv = ( dpos_w(idx(2),:) - dpos_w(idx(1),:) ) * (dt_w(idx(2)) - dt_w(idx(1))) / denom;
                     else
-                        [s_dp(1),s_dv(1)] = linearLeastSquares(dt_w(idx),dpos_w(idx,1),P);
-                        [s_dp(2),s_dv(2)] = linearLeastSquares(dt_w(idx),dpos_w(idx,2),P);
-                        [s_dp(3),s_dv(3)] = linearLeastSquares(dt_w(idx),dpos_w(idx,3),P);
+                        [s_dp(1),s_dv(1)] = linearLeastSquares(dt_w(idx),dpos_w(idx,1),ransac_prior);
+                        [s_dp(2),s_dv(2)] = linearLeastSquares(dt_w(idx),dpos_w(idx,2),ransac_prior);
+                        [s_dp(3),s_dv(3)] = linearLeastSquares(dt_w(idx),dpos_w(idx,3),ransac_prior);
                     end
 
                     step_error = s_dv.*dt_w(1:windowSize) + s_dp - dpos_w(1:windowSize,:);
@@ -139,7 +185,11 @@ for i=2:N
             end
 
         end
-        delta_t = (data.time(i) - time_w(windowSize))/1000;
+        if windowSize > 0
+            delta_t = (data.time(i) - time_w(windowSize))/1000;
+        else
+            delta_t = data.time(i);
+        end
         state.p = prediction.p + corrector.p + corrector.v*delta_t;
         state.v = prediction.v + corrector.v;
     end
@@ -215,12 +265,12 @@ plot(log.y,log.z,'r')
 error.x = log.x - data.x';
 error.y = log.y - data.y';
 error.z = log.z - data.z';
-error.vx = log.vx - data.vx';
-error.vy = log.vy - data.vy';
-error.vz = log.vz - data.vz';
+%error.vx = log.vx - data.vx';
+%error.vy = log.vy - data.vy';
+%error.vz = log.vz - data.vz';
 
 figure(2)
-subplot(2,1,1)
+%subplot(2,1,1)
 hold on
 grid on
 grid minor
@@ -228,11 +278,27 @@ plot(log.time,error.x);
 plot(log.time,error.y);
 plot(log.time,error.z);
 legend('x','y','z')
-subplot(2,1,2)
-hold on
-grid on
+%subplot(2,1,2)
+%hold on
+%grid on
+%grid minor
+%plot(log.time,error.vx);
+%plot(log.time,error.vy);
+%plot(log.time,error.vz);
+%legend('x','y','z')
+
+figure(3)
+axis([-5,5,-5,5,-5,5])
+xticks([-5,-4,-3,-2,-1,0,1,2,3,4,5])
+xlabel('x')
+yticks([-5,-4,-3,-2,-1,0,1,2,3,4,5])
+ylabel('y')
+zticks([-5,-4,-3,-2,-1,0,1,2,3,4,5])
+zlabel('z')
+daspect([1 1 1])
+hold('on')
+grid('on')
 grid minor
-plot(log.time,error.vx);
-plot(log.time,error.vy);
-plot(log.time,error.vz);
-legend('x','y','z')
+plot3(data.x,data.y,data.z,'b')
+plot3(log.measurement.x, log.measurement.y, log.measurement.z ,'x')
+%plot3(log.x,log.y,log.z,'r')
