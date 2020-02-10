@@ -4,8 +4,9 @@ close all;
 %clear all;
 addpath('Functions');
 addpath('Classes');
+addpath('Systems');
 %load('Data/square.mat')
-load('simulationData_test.mat');
+%load('simulationData_test.mat');
 %% Parameters
 pos_update_dt = 0.01;
 mhe_timeHorizon = 0.5; % s
@@ -25,6 +26,8 @@ g = 9.81;
 state_prediction = QuadrotorState();
 state_corrector = QuadrotorState();
 state_estimate = QuadrotorState();
+measurement = QuadrotorState();
+estimator = MovingHorizonEstimator();
 
 % initial values
 pos0 = [data.x(1),data.y(1),data.z(1)];
@@ -52,20 +55,7 @@ mode = data.uwb(1).rangingMode;
 for i=10:N
     time_now = data.time(i);
     if(mod(time_now,pos_update_dt) == 0)
-        % Prediction 
-        pitch_global = data.pitch(i) * cos(data.yaw(i)) - data.roll(i)*sin(data.yaw(i));
-        roll_global = data.pitch(i) * sin(data.yaw(i)) + data.roll(i)*cos(data.yaw(i));
-        
-        state_prediction.p(1) = state_prediction.p(1) + state_prediction.v(1) * pos_update_dt;
-        state_prediction.p(2) = state_prediction.p(2) + state_prediction.v(2) * pos_update_dt;
-        
-        state_prediction.v(1) = state_prediction.v(1)...
-                                + (-g*tan(pitch_global) - k_aero*state_prediction.v(1)) * pos_update_dt;
-        state_prediction.v(2) = state_prediction.v(2)...
-                                + (g*tan(roll_global) - k_aero*state_prediction.v(2)) * pos_update_dt;
-        log.prediction(i,:) = state_prediction.p; 
-        
-        % Measurement
+        %% Measurement
         measurement_update = 0;
         %%%%%%%%%%%
         % Multilateration & Variations
@@ -94,7 +84,11 @@ for i=10:N
             uwb_mem = uwb_mat(uwb_logical);
         end
         
-        measurement = uwbMultilat(uwb_mem, 'prior', state_estimate.p,'nbest',10);%, 'forceZ', data.z(i));
+        measurement.p = uwbMultilat(uwb_mem, 'prior', state_estimate.p,'nbest',10);%, 'forceZ', data.z(i));
+        measurement.pitch = data.pitch(i);
+        measurement.roll = data.roll(i);
+        measurement.yaw = data.yaw(i);
+        measurement.timestamp = time_now;
         
         %%%%%%%%%%%
         % Single Measurement Projection & Variations
@@ -106,84 +100,12 @@ for i=10:N
 %         measurement = prior;
         %%%%%%%%%%%
         
-        log.measurement.x(i) = measurement(1);
-        log.measurement.y(i) = measurement(2);
-        log.measurement.z(i) = measurement(3);
+        log.measurement.x(i) = measurement.p(1);
+        log.measurement.y(i) = measurement.p(2);
+        log.measurement.z(i) = measurement.p(3);
         
-        if measurement_update
-            % Update moving windows
-            wPrediction = [state_prediction.p; wPrediction(1:end-1,:)];
-            wMeasurement = [measurement; wMeasurement(1:end-1,:)];
-            wTime = [time_now; wTime(1:end-1)];
-            
-            if (windowSize < MAX_WINDOW_SIZE)
-                windowSize = windowSize + 1;
-            end
-            while ((wTime(1)-wTime(windowSize)) > mhe_timeHorizon)
-                windowSize = windowSize -1;
-            end
-            
-            % calculate delta windows
-            wDt = wTime - wTime(windowSize);
-            wDp = wMeasurement - wPrediction;
+        state_estimate = estimator(measurement,time_now);
 
-            % RANSAC MHE
-            if(windowSize >= ransac_sampleSize && sum(wDt>0)>ransac_sampleSize-1)
-                best_error = windowSize * ransac_outlierThreshold + 1;
-
-                for j=1:ransac_iter
-                    idx = randsample(windowSize,ransac_sampleSize);
-
-                    if (ransac_sampleSize == 2)
-                        denom = (wDt(idx(2)) - wDt(idx(1)))^2 + 2*PV;
-
-                        s_dp = (( wDp(idx(1),:) * wDt(idx(2)) - wDp(idx(2),:) * wDt(idx(1)) ) ...
-                                * (wDt(idx(2)) - wDt(idx(1))) + (wDp(idx(1),:) + wDp(idx(2),:)) * PV)/denom;
-                        s_dv = ( wDp(idx(2),:) - wDp(idx(1),:) ) * (wDt(idx(2)) - wDt(idx(1))) / denom;
-                    else
-                        [s_dp(1),s_dv(1)] = linearLeastSquares(wDt(idx),wDp(idx,1),ransac_prior);
-                        [s_dp(2),s_dv(2)] = linearLeastSquares(wDt(idx),wDp(idx,2),ransac_prior);
-                        [s_dp(3),s_dv(3)] = linearLeastSquares(wDt(idx),wDp(idx,3),ransac_prior);
-                    end
-
-                    step_error = s_dv.*wDt(1:windowSize) + s_dp - wDp(1:windowSize,:);
-                    step_error = sqrt(sum(step_error.^2,2)); % mean squared error for each timestep
-                    isOutlier = (step_error>ransac_outlierThreshold); % identify outliers
-                    step_error(isOutlier) = ransac_outlierThreshold; % prune outlier error
-                    total_error = sum(step_error);
-
-                    % Update best model
-                    if (total_error < best_error)
-                       best_error = total_error;
-                       best_isOutlier = isOutlier;
-                       best_dp = s_dp;
-                       best_dv = s_dv;
-                    end
-                end
-
-                % Recalculate best model from inliers
-                if (sum(~best_isOutlier)>=2)
-                    dpos_in = wDp(~best_isOutlier,:);
-                    dt_in = wDt(~best_isOutlier);
-
-                    [state_corrector.p(1), state_corrector.v(1)] = linearLeastSquares(dt_in,dpos_in(:,1),ransac_prior);
-                    [state_corrector.p(2), state_corrector.v(2)] = linearLeastSquares(dt_in,dpos_in(:,2),ransac_prior);
-                    [state_corrector.p(3), state_corrector.v(3)] = linearLeastSquares(dt_in,dpos_in(:,3),ransac_prior);
-                else
-                    state_corrector.p = best_dp;
-                    state_corrector.v = best_dv;
-                end
-
-            end
-
-        end
-        if windowSize > 0
-            delta_t = (data.time(i) - wTime(windowSize))/1000;
-        else
-            delta_t = data.time(i);
-        end
-        state_estimate.p = state_prediction.p + state_corrector.p + state_corrector.v*delta_t;
-        state_estimate.v = state_prediction.v + state_corrector.v;
     end
     
     log.time(i) = data.time(i);
@@ -293,4 +215,4 @@ grid('on')
 grid minor
 plot3(data.x,data.y,data.z,'b')
 plot3(log.measurement.x, log.measurement.y, log.measurement.z ,'x')
-%plot3(log.x,log.y,log.z,'r')
+plot3(log.x,log.y,log.z,'r')
