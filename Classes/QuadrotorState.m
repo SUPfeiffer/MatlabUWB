@@ -3,12 +3,12 @@ classdef QuadrotorState
     %   No angular velocities atm
     
     properties
-        p = [0,0,0]
-        v = [0,0,0]
-        roll = 0
-        pitch = 0
-        yaw = 0
-        timestamp = 0
+        p = [0,0,0]         % x, y, z
+        v = [0,0,0]         % vx, vy, vz
+        attitude = [0,0,0]  % roll, pitch, yaw
+        omega = [0,0,0]     % roll, pitch, yaw - rates
+        acc = [0,0,0]       % ax,ay,az
+        timestamp = 0       % t at which state was computed
     end
     
     methods
@@ -20,18 +20,16 @@ classdef QuadrotorState
             r = QuadrotorState;
             r.p = obj1.p + obj2.p;
             r.v = obj1.v + obj2.v;
-            r.roll = obj1.roll + obj2.roll;
-            r.pitch = obj1.pitch + obj2.pitch;
-            r.yaw = obj1.yaw + obj2.yaw;
+            r.attitude = obj1.attitude + obj2.attitude;
+            r.omega = obj1.omega + obj2.omega;
             r.timestamp = min([obj1.timestamp, obj2.timestamp]);
         end
         function r = minus(obj1, obj2)
             r = QuadrotorState;
             r.p = obj1.p - obj2.p;
             r.v = obj1.v - obj2.v;
-            r.roll = obj1.roll - obj2.roll;
-            r.pitch = obj1.pitch - obj2.pitch;
-            r.yaw = obj1.yaw - obj2.yaw;
+            r.attitude = obj1.attitude - obj2.attitude;
+            r.omega = obj1.omega - obj2.omega;
             r.timestamp = min([obj1.timestamp, obj2.timestamp]);
         end    
     end

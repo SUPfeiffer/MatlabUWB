@@ -32,7 +32,7 @@ function position = uwbProject(uwb,prior,varargin)
         a1 = uwb.anchorPosition_A'; 
         a2 = uwb.anchorPosition_B';
         % variables for timeout if no convergence
-        timeout_max_i = 20; 
+        timeout_max_i = 5; 
         exit_timeout = 0;     
         
         if isnan(forceZ)
@@ -92,8 +92,8 @@ function position = uwbProject(uwb,prior,varargin)
             position = X(1:3)';
         else
             % z forced, doesn't work properly yet!
-            prior(3) = forceZ;
-            X = [prior(1:2)'; 0];    % Candidate Solution (position on tdoa measurement)
+            prior = prior([1,2]);
+            X = [prior'; 0];    % Candidate Solution (position on tdoa measurement)
             F = zeros(3,1);     % Objective function
             while (true)
                 d1 = norm([X(1:2);forceZ]-a1);
@@ -107,8 +107,14 @@ function position = uwbProject(uwb,prior,varargin)
                 F(3) = d1 - d2 - uwb.distance;
 
                 % Jacobian of the objective function
-                J(1:2,1:2) = eye(2) + X(3)*( (eye(2)/d1 - ((X(1:2)-a1(1:2))*(X(1:2)-a1(1:2))')/(d1^3)) ...
-                                            -(eye(2)/d2 - ((X(1:2)-a2(1:2))*(X(1:2)-a2(1:2))')/(d2^3)) );
+                J(1,1) = 1 + X(3)*( (1/d1-(X(1)-a1(1))/d1^3) - (1/d2 - (X(1)-a2(1))/d2^3));
+                J(1,2) = 0 + X(3)*( (X(1)-a1(1))*(X(2)-a1(2))/d1^3 - (X(1)-a2(1))*(X(2)-a2(2))/d2^3);
+                
+                J(2,1) = 0 + X(3)*( (X(1)-a1(1))*(X(2)-a1(2))/d1^3 - (X(1)-a2(1))*(X(2)-a2(2))/d2^3);
+                J(2,2) = 1 + X(3)*( (1/d1-(X(2)-a1(2))/d1^3) - (1/d2 - (X(2)-a2(2))/d2^3));
+                
+%                J(1:2,1:2) = eye(2) + X(3)*( (eye(2)/d1 - ((X(1:2)-a1(1:2))*(X(1:2)-a1(1:2))')/(d1^3)) ...
+%                                            -(eye(2)/d2 - ((X(1:2)-a2(1:2))*(X(1:2)-a2(1:2))')/(d2^3)) );
                 J(1:2,3) = gradS;
                 J(3,1:3) = [gradS; 0]';
 

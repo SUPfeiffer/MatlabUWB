@@ -6,7 +6,14 @@ classdef MovingHorizonEstimator < matlab.System
 
     % Public, tunable properties
     properties
-
+        % MHE
+        maxWindowSize = 100;
+        timeHorizon = 0.15;
+        % RANSAC
+        ransacIterations = 10;
+        ransacSamples = 2;
+        ransacPrior = [0, 0; 0, 50];
+        outlierThreshold = 0.5;
     end
 
     properties(DiscreteState)
@@ -27,14 +34,6 @@ classdef MovingHorizonEstimator < matlab.System
         % Model
         g = 9.81;   % gravitational constant
         k = 0.35;   % drag coefficient
-        % MHE
-        maxWindowSize = 100;
-        timeHorizon = 0.15;
-        % RANSAC
-        ransacIterations = 10;
-        ransacSamples = 2;
-        ransacPrior = [0, 0; 0, 50];
-        outlierThreshold = 0.5;
     end
 
     methods
@@ -49,14 +48,10 @@ classdef MovingHorizonEstimator < matlab.System
             % Perform one-time calculations, such as computing constants
         end
 
-        function est = stepImpl(obj, measurement, time)
-            % Attittude measurement is correct
-            attitude.pitch = measurement.pitch;
-            attitude.roll = measurement.roll;
-            attitude.yaw = measurement.yaw;
-            
+        function [pred, est] = stepImpl(obj, measurement, time)
             % Prediction
-            obj.updatePrediction(attitude, time);
+            obj.updatePrediction(measurement.attitude, time);
+            obj.x_pred(3) = measurement.p(3);
             
             if measurement.timestamp > obj.last_error_update
                 wDt = obj.updateWindows(measurement, time);
@@ -115,6 +110,11 @@ classdef MovingHorizonEstimator < matlab.System
                 dt = time - obj.wt(obj.windowSize);
             end
             
+            pred = QuadrotorState();
+            pred.p = obj.x_pred;
+            pred.v = obj.v_pred;
+            pred.timestamp = time;
+            
             est = QuadrotorState();
             est.p = obj.x_pred + obj.dx_est + dt*obj.dv_est;
             est.v = obj.v_pred + obj.dv_est;
@@ -139,15 +139,16 @@ classdef MovingHorizonEstimator < matlab.System
         function obj = updatePrediction(obj,attitude,time)
             dt = time - obj.t_pred;
             obj.t_pred = time;
-            
-            p_global = attitude.pitch * cos(attitude.yaw) - attitude.roll*sin(attitude.yaw);
-            r_global = attitude.pitch * sin(attitude.yaw) + attitude.roll*cos(attitude.yaw);
+                      
+            p_global = attitude(2) * cos(attitude(3)) + attitude(1)*sin(attitude(3));
+            r_global = -attitude(2) * sin(attitude(3)) + attitude(1)*cos(attitude(3));
         
             obj.x_pred(1) = obj.x_pred(1) + obj.v_pred(1) * dt;
             obj.x_pred(2) = obj.x_pred(2) + obj.v_pred(2) * dt;
-        
+            
             obj.v_pred(1) = obj.v_pred(1) + (-obj.g*tan(p_global) - obj.k*obj.v_pred(1)) * dt;
             obj.v_pred(2) = obj.v_pred(2) + ( obj.g*tan(r_global) - obj.k*obj.v_pred(2)) * dt;
+
         end
         
         function wDt = updateWindows(obj, measurement, time)

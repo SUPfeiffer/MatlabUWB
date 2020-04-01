@@ -1,19 +1,18 @@
 close all;
 clear all;
-addpath('Classes and Objects')
 addpath('Functions')
-addpath('Data Types')
+addpath('Classes')
 %% Inputs
 rng(0);
 N = 10000;
 dt = 0.01;   % in s
 uwb_range = 20;
-uwb_update_probability = 0.9; % determines avg frequency of uwb measurements
+uwb_update_probability = 0.7; % determines avg frequency of uwb measurements
 uwb_mode = rangingModes.tdoa;      % 'tdoa' or 'twr'
 
 % Noise
 noise.attitude = 0.05;
-noise.uwb = 0.05;
+noise.uwb = 0.1;
 
 % Constants
 g = 9.81;
@@ -27,10 +26,10 @@ anchors(i) = Anchor(1,[-5, 5, 1.7]); i=i+1;
 anchors(i) = Anchor(2,[ 5, 5, 0.9]); i=i+1;
 anchors(i) = Anchor(3,[ 5,-5, 1.7]); i=i+1;
 % Cube setup
-anchors(i) = Anchor(4,[-5,-5, 0]); i=i+1;
-anchors(i) = Anchor(5,[-5, 5, 0]); i=i+1;
-anchors(i) = Anchor(6,[ 5, 5, 5]); i=i+1;
-anchors(i) = Anchor(7,[ 5,-5, 0]); i=i+1;
+%anchors(i) = Anchor(4,[-5,-5, 0]); i=i+1;
+%anchors(i) = Anchor(5,[-5, 5, 0]); i=i+1;
+%anchors(i) = Anchor(6,[ 5, 5, 5]); i=i+1;
+%anchors(i) = Anchor(7,[ 5,-5, 0]); i=i+1;
 
 %% Drone trajectory (ground truth)
 data.time = (linspace(0,N-1,N)*dt)';
@@ -71,9 +70,9 @@ end
 data.pitch = zeros(N,1);
 data.roll = zeros(N,1);
 data.yaw = zeros(N,1);
-for i=2:N
-    data.pitch(i) = atan(-(dt*data.vx(i)+k_aero*data.vx(i-1))/g);
-    data.roll(i) = atan((dt*data.vy(i)+k_aero*data.vy(i-1))/g);
+for i=1:N-1
+    data.pitch(i) = atan(((data.vx(i+1)-data.vx(i))/dt + k_aero*data.vx(i))/g);
+    data.roll(i) = atan(-((data.vy(i+1)-data.vy(i))/dt + k_aero*data.vy(i))/g);
 
     data.pitch(i) = data.pitch(i)  + noise.attitude * randn();
     data.roll(i) = data.roll(i) + noise.attitude * randn();

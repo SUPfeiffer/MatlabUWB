@@ -87,23 +87,32 @@ function position = uwbMultilat(uwb, varargin)
         % No analytical solution for tdoa 
         % -> numerical solution with Gauss-Newton
         position = prior;
+        if ~isnan(forceZ)
+            position(3) = forceZ;
+        end
         while true
             for i=1:N
-                if ~isnan(forceZ)
-                    position(3) = forceZ;
-                end
-                
                 dA = position - uwb(i).anchorPosition_A;
                 dB = position - uwb(i).anchorPosition_B;
-                
                 S(i) = norm(dA) - norm(dB) - uwb(i).distance;
-                J(i,:) = dA/norm(dA) - dB/norm(dB);
+                
+                if ~isnan(forceZ)
+                    J(i,:) = dA(1:2)/norm(dA) - dB(1:2)/norm(dB);
+                    J_valid = (rank(J)>= 2);
+                else
+                    J(i,:) = dA/norm(dA) - dB/norm(dB);
+                    J_valid = (rank(J) >= 3);
+                end
             end
             
-            if rank(J)<3
+            if ~J_valid
                 break;
             end
             delta = J\S';
+            if ~isnan(forceZ)
+                delta(3) = 0;
+            end
+                
             position = position - delta';
             
             if norm(delta) < 0.001
