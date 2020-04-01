@@ -1,4 +1,9 @@
-%%% Format log for Matlab MHE
+%% Log2Data
+% This script takes a crazyflie log in csv format (see python script to
+% collect log data from the crazyflie) and turns it into a .mat file that
+% can be imported by the EstimatorSimulation_main.m script
+%
+% Author: S. Pfeiffer, MAVLab TU Delft
 
 
 %% Import log file

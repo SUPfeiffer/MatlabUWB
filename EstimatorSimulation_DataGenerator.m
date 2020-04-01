@@ -1,23 +1,41 @@
-close all;
-clear all;
+%% Estimator Simulation: Data Generator
+% This script uses a strongly simplified drone model to create a dataset
+% that can be used to simulate different state estimators with the
+% EstimatorSimulation_main.m script.
+%
+% Author: S. Pfeiffer, MAVLab TU Delft
+
+
+%% Setup
+% Add paths
 addpath('Functions')
 addpath('Classes')
-%% Inputs
-rng(0);
-N = 10000;
-dt = 0.01;   % in s
-uwb_range = 20;
-uwb_update_probability = 0.7; % determines avg frequency of uwb measurements
-uwb_mode = rangingModes.tdoa;      % 'tdoa' or 'twr'
 
-% Noise
-noise.attitude = 0.05;
-noise.uwb = 0.1;
+% close figures and clear workspace
+close all;
+clear all;
 
 % Constants
 g = 9.81;
 k_aero = 0.35;
-%% Anchors
+
+% random number generator seed
+rng(0);
+
+% Simulation parameters
+N = 10000;   % data points
+dt = 0.01;   % timestep in s
+
+% UWB parameters
+uwb_range = 20;                 % not used atm
+uwb_update_probability = 0.7;   % determines avg frequency of uwb measurements
+uwb_mode = rangingModes.tdoa;   % 'tdoa' or 'twr'
+
+% Noise stdev
+noise.attitude = 0.05;
+noise.uwb = 0.1;
+
+%% UWB Anchors
 % remove anchor by comenting the line
 i = 1;
 % Cyberzoo-like setup
@@ -34,12 +52,6 @@ anchors(i) = Anchor(3,[ 5,-5, 1.7]); i=i+1;
 %% Drone trajectory (ground truth)
 data.time = (linspace(0,N-1,N)*dt)';
 time = data.time;
-%3rd order polynomial
-% p0 = [1,2,0];
-% p1 = [4,4,3];
-% v0 = [1,5,0];
-% v1 = [2,5,0];
-% traj = trajSpline(p0,p1,v0,v1,time);
 
 % setpoints
 points = [ 0, 0, 0;
@@ -80,7 +92,7 @@ for i=1:N-1
 end
 
 
-%% UWB
+%% Calculate UWB measurements
 position = [data.x, data.y, data.z];
 uwb_count = 1;
 for i=1:N
