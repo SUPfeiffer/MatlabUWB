@@ -1,0 +1,95 @@
+{
+    "twr":{
+        "name": "twr",
+        "type": "CF",
+        "period": 10,
+        "variables": ["ranging.distance0",
+                        "ranging.distance1",
+                        "ranging.distance2",
+                        "ranging.distance3"],
+        "headers": ["twr0", "twr1", "twr2", "twr3"]
+    },
+
+    "tdoa":{
+        "name": "tdoa",
+        "type": "CF",
+        "period": 10,
+        "variables": ["uwbTdoa.diff01",
+                        "uwbTdoa.diff02",
+                        "uwbTdoa.diff03",
+                        "uwbTdoa.diff12",
+                        "uwbTdoa.diff13",
+                        "uwbTdoa.diff23"],
+        "headers": ["tdoa01", "tdoa02", "tdoa03", "tdoa12", "tdoa13", "tdoa23"]
+    },
+
+    "gyros":{
+        "name": "gyros",
+        "type": "CF",
+        "period": 10,
+        "variables": ["gyro.x",
+                        "gyro.y",
+                        "gyro.z"],
+        "headers": ["gyroX", "gyroY", "gyroZ"]
+    },
+
+    "attitude":{
+        "name": "attitude",
+        "type": "CF",
+        "period": 10,
+        "variables": ["stabilizer.roll",
+                        "stabilizer.pitch",
+                        "stabilizer.yaw"],
+        "headers": ["roll", "pitch", "yaw"]
+    },
+
+    "acc":{
+        "name": "acc",
+        "type": "CF",
+        "period": 10,
+        "variables": ["acc.x",
+                        "acc.y",
+                        "acc.z"],
+        "headers": ["accX", "accY", "accZ"]
+    },
+
+    "kalman":{
+        "name": "kalman",
+        "type": "CF",
+        "period": 10,
+        "variables": ["kalman.stateX",
+                        "kalman.stateY",
+                        "kalman.stateZ"],
+        "headers": ["kalX", "kalY", "kalZ"]
+    },
+    
+    "mhe":{
+        "name": "mhe",
+        "type": "CF",
+        "period": 10,
+        "variables": ["mhe.uwbX",
+                        "mhe.uwbY",
+                        "mhe.uwbZ"],
+        "headers": ["mheX", "mheY", "mheZ"]
+    },
+
+    "otpos":{
+        "name": "otpos",
+        "type": "EXT",
+        "period": 10,
+        "variables": ["otX",
+                        "otY",
+                        "otZ"],
+        "headers": ["otX", "otY", "otZ"]
+    },
+    
+    "otatt":{
+        "name": "otatt",
+        "type": "EXT",
+        "period": 10,
+        "variables": ["otRoll",
+                        "otPitch",
+                        "otYaw"],
+        "headers": ["otRoll", "otPitch", "otYaw"]
+    }
+}
