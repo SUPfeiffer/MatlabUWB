@@ -37,7 +37,6 @@ def scanArea(limits, spacing, altitude, yaw):
         y_is_min = not(y_is_min)
         y = y_min if y_is_min else y_max
         setpoints.append( (x_line, y, altitude, yaw) )
-    setpoints.append( (x_line, y, 0, yaw) )
     return setpoints
 
 # starts at 0,0
